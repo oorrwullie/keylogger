@@ -3,7 +3,6 @@ package keylogger
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -18,6 +17,11 @@ type KeyLogger struct {
 
 type devices []string
 
+type Keyboard struct {
+	Device string
+	Path   string
+}
+
 func (d *devices) hasDevice(str string) bool {
 	for _, device := range *d {
 		if strings.Contains(str, device) {
@@ -30,25 +34,27 @@ func (d *devices) hasDevice(str string) bool {
 
 // use lowercase names for devices, as we turn the device input name to lower case
 var restrictedDevices = devices{"mouse"}
-var allowedDevices = devices{"keyboard", "logitech mx keys"}
+var allowedDevices = devices{"keyboard", "logitech mx keys", "sayodevice m3k rgb"}
 
 // New creates a new keylogger for a device path
 func New(devPath string) (*KeyLogger, error) {
 	k := &KeyLogger{}
-	if !k.IsRoot() {
-		return nil, errors.New("Must be run as root")
-	}
+	// commented out to allow for testing
+	// if !k.IsRoot() {
+	// 	return nil, errors.New("Must be run as root")
+	// }
 	fd, err := os.OpenFile(devPath, os.O_RDWR, os.ModeCharDevice)
 	k.fd = fd
 	return k, err
 }
 
-// FindKeyboardDevice by going through each device registered on OS
+// FindKeyboardDevices by going through each device registered on OS
 // Mostly it will contain keyword - keyboard
-// Returns the file path which contains events
-func FindKeyboardDevice() string {
+// Returns the device name and file path which contains events for each device found
+func FindKeyboardDevices() []Keyboard {
 	path := "/sys/class/input/event%d/device/name"
 	resolved := "/dev/input/event%d"
+	var keyboards []Keyboard
 
 	for i := 0; i < 255; i++ {
 		buff, err := ioutil.ReadFile(fmt.Sprintf(path, i))
@@ -61,11 +67,14 @@ func FindKeyboardDevice() string {
 		if restrictedDevices.hasDevice(deviceName) {
 			continue
 		} else if allowedDevices.hasDevice(deviceName) {
-			return fmt.Sprintf(resolved, i)
+			keyboards = append(keyboards, Keyboard{
+				Device: deviceName,
+				Path:   fmt.Sprintf(resolved, i),
+			})
 		}
 	}
 
-	return ""
+	return keyboards
 }
 
 // Like FindKeyboardDevice, but finds all devices which contain keyword 'keyboard'
